@@ -1,25 +1,171 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Assignment"
+author: "Alejandro Mendez"
+date: "2/9/2020"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Libraries
 
-## Loading and preprocessing the data
+```{r}
+library(tidyr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(timeDate)
+library(ggpubr)
+
+```
+
+
+# Loading and preprocessing the data
+
+**Data get from de link provided**
+```{r}
+URL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+filename <- paste("./data", "/", "data.zip", sep = "")
+dir.create("data")
+download.file(url = URL, destfile = filename)
+unzip(zipfile = filename, exdir = "./data")
+
+
+```
+
+**Load the data**
+```{r}
+data <- read.csv("data/activity.csv")
+data$date = as.Date(data$date, "%Y-%m-%d")
+colnames(data)[2] <- "fechas"
+str(data$fechas)
+head(data)
+```
+
+# What is mean total number of steps taken per day?
 
 
 
-## What is mean total number of steps taken per day?
+
+**Make the histogram**
+```{r}
+g <- data %>% mutate(date_col = date(fechas)) %>%
+  group_by(date_col) %>%
+  summarize(value = sum(steps, na.rm = TRUE)) %>%
+  ggplot(aes(date_col, value)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Total number of steps taken each day",
+       x = "Date", y = "Steps") +
+  scale_x_date(breaks = breaks_pretty(30))+ 
+  theme(axis.text.x = element_text(angle = 90))
+g
+```
 
 
+**Calculate the mean and median**
+```{r}
+mm <- data %>% mutate(date_col = date(fechas)) %>%
+  group_by(date_col) %>%
+  summarize(median_steps = median(steps, na.rm = TRUE),
+            mean_steps =  mean(steps, na.rm = TRUE)) 
+mm
 
-## What is the average daily activity pattern?
+```
+
+# What is the average daily activity pattern?
+
+**Make the plot**
+```{r}
+ts <- data %>% group_by(interval) %>%
+  summarize(mean_steps =  mean(steps, na.rm = TRUE)) %>%
+  subset(!is.na(mean_steps)) %>%
+  ggplot(aes(interval, mean_steps)) +
+  geom_line( color = "steelblue") +
+  theme_minimal() +
+  labs(title = "Mean of steps taken each interval",
+       x = "Interval", y = "Steps") +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_x_continuous(breaks = pretty(data$interval, n = 20)) 
+  
+
+ts
+```
 
 
+**Get the interval who contain the maximum number of steps**
+```{r}
+mint <- data %>% group_by(interval) %>%
+  summarize(mean_steps =  mean(steps, na.rm = TRUE)) %>%
+  top_n(1)
+mint
 
-## Imputing missing values
+```
 
 
+# Imputing missing values
 
-## Are there differences in activity patterns between weekdays and weekends?
+**We have  missing data**
+
+```{r}
+sum(is.na(data))
+```
+
+
+**First, impute the NA values using the mean by interval group. Make nona dataframe with imputed values.**
+
+```{r}
+nona <- data
+nona <- nona %>% group_by(interval) %>%
+  mutate_all(funs(ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+nona$fechas <- data$fechas
+sum(is.na(nona))
+```
+
+**Then, compare the histograms**
+```{r}
+gnona <- nona %>% mutate(date_col = date(fechas)) %>%
+  group_by(date_col) %>% summarize(value= sum(steps)) %>%
+  ggplot(aes(date_col, value)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Total number of steps taken each day",
+       x = "Date", y = "Steps") +
+  scale_x_date(breaks = breaks_pretty(30))+ 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+ggarrange(g,gnona)
+```
+
+**And obtain mean and median again.**
+```{r}
+mmnona <- nona %>% mutate(date_col = date(fechas)) %>%
+  group_by(date_col) %>%
+  summarize(median_steps = median(steps, na.rm = TRUE),
+            mean_steps =  mean(steps, na.rm = TRUE)) 
+mmnona
+
+```
+
+**Before we didnt get the data to calculate mean and median on certain days. Now we replace this NA values with the median.**
+
+# Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+datweek = data
+datweek$fecha = isWeekday(data$fechas, wday = 1:5)
+datweek$fecha = ifelse(datweek$fecha == TRUE, "Weekday", "Weekend")
+
+pp <- datweek %>% group_by(fecha, interval) %>%
+  summarize(mean_steps = mean(steps, na.rm = TRUE)) %>%
+  ggplot(aes(interval, mean_steps )) +
+  geom_line( color = "steelblue") +
+  facet_wrap(~fecha, nrow = 2) +
+  labs(title = "Average number of steps taken per 5-minute interval across weekdays and weekends")
+
+pp
+```
+
